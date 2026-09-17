@@ -1,74 +1,33 @@
-# Started.dev Runner (MVP)
+# Started runner
 
-This runner executes `run_command` actions for Started.dev by running commands inside a Docker container on a remote node.
+Isolated execution for Starts. This service is **not** an inference API.
 
-## Endpoints
+It receives a workspace, runs the allowed command with network off, and returns logs. The CLI / engine still own the receipt. `wallet.sign` is never allowed.
 
-### Public
-- GET `/health`
-- GET `/fingerprint`
+```
+POST /v1/sessions     Bearer
+GET  /v1/sessions/:id Bearer
+GET  /health
+GET  /fingerprint
+```
 
-### Auth (Bearer token)
-- POST `/runs`  -> start a run
-- GET `/runs/:id` -> run status + logs
-- GET `/runs/:id/stream` -> SSE stream of logs
+## Policy
 
-Auth header:
-`Authorization: Bearer <RUNNER_SHARED_SECRET>`
+- Network off unless the kit explicitly allows `net.unrestricted` (official kits do not)
+- `wallet.sign` denied
+- `confirmRun` kits require `{ "confirm": true }`
+- Concurrency cap, timeout, closed filesystem under the workspace
 
-## Environment variables
-
-- `PORT` (default 8080)
-- `RUNNER_NODE_ID` (default runner-1)
-- `RUNNER_SHARED_SECRET` (required for run endpoints)
-- `RUN_IMAGE` (default node:20-alpine)
-- `RUN_MAX_CONCURRENCY` (default 5)
-- `RUN_TIMEOUT_MS` (default 600000)
-- `WORKSPACE_ROOT` (default /workspaces)
-
-## Running locally (requires Docker)
+## Local
 
 ```bash
-docker build -t started-runner:latest .
-docker run --rm -p 8080:8080 \
-  -e RUNNER_SHARED_SECRET=devsecret \
+docker build -t started-runner .
+docker run --rm -p 8787:8787 \
+  -e RUNNER_SHARED_SECRET=dev \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  started-runner:latest
+  started-runner
+```
 
-  Health:
+Without Docker the runner executes in-process (file checks only). That is for development. Production uses the image.
 
-curl http://localhost:8080/health
-
-
-Start a run:
-
-curl -X POST http://localhost:8080/runs \
-  -H "Authorization: Bearer devsecret" \
-  -H "Content-Type: application/json" \
-  -d '{"command":"node -v"}'
-
-
----
-
-## 5) `docker-compose.example.yml`
-```yaml
-version: "3.9"
-
-services:
-  runner:
-    build: .
-    ports:
-      - "8080:8080"
-    environment:
-      RUNNER_NODE_ID: "do-runner-1"
-      RUNNER_SHARED_SECRET: "CHANGE_ME"
-      RUN_IMAGE: "node:20-alpine"
-      RUN_MAX_CONCURRENCY: "5"
-      RUN_TIMEOUT_MS: "600000"
-      WORKSPACE_ROOT: "/workspaces"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - runner_workspaces:/workspaces
-
-volumes:
-  runner_workspaces:
+See [`Started-dev/started`](https://github.com/Started-dev/started) for the engine and CLI.
